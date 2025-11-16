@@ -1,6 +1,10 @@
 import React from 'react';
-import { Plus, MessageSquare, Settings, LogOut } from 'lucide-react';
 import '../styles/Sidebar.css';
+
+interface User {
+  id: number;
+  email: string;
+}
 
 interface ChatSession {
   id: string;
@@ -14,6 +18,8 @@ interface SidebarProps {
   currentSessionId: string;
   onNewChat: () => void;
   onSelectSession: (sessionId: string) => void;
+  onLogout?: () => void;
+  user?: User | null;
 }
 
 function Sidebar({
@@ -21,31 +27,34 @@ function Sidebar({
   currentSessionId,
   onNewChat,
   onSelectSession,
+  onLogout,
+  user,
 }: SidebarProps) {
   return (
     <div className="sidebar">
       {/* Header */}
       <div className="sidebar-header">
         <button className="new-chat-btn" onClick={onNewChat}>
-          <Plus size={18} />
-          New Chat
+          <span>+</span> New Chat
         </button>
       </div>
 
       {/* Chat History */}
       <div className="chat-history">
-        {sessions.map((session) => (
-          <div
-            key={session.id}
-            className={`chat-item ${
-              currentSessionId === session.id ? 'active' : ''
-            }`}
-            onClick={() => onSelectSession(session.id)}
-          >
-            <MessageSquare size={16} />
-            <span className="chat-title">{session.title}</span>
-          </div>
-        ))}
+        {sessions && sessions.length > 0 ? (
+          sessions.map((session) => (
+            <div
+              key={session.id}
+              className={`chat-item ${currentSessionId === session.id ? 'active' : ''}`}
+              onClick={() => onSelectSession(session.id)}
+            >
+              <span className="chat-icon">💬</span>
+              <span className="chat-title">{session.title}</span>
+            </div>
+          ))
+        ) : (
+          <div className="no-chats">No chats yet. Start a new conversation!</div>
+        )}
       </div>
 
       {/* Divider */}
@@ -54,18 +63,39 @@ function Sidebar({
       {/* Bottom Menu */}
       <div className="sidebar-bottom">
         <button className="sidebar-btn">
-          <Settings size={18} />
+          <span>⚙️</span>
           <span>Settings</span>
-        </button>
-        <button className="sidebar-btn">
-          <LogOut size={18} />
-          <span>Log out</span>
         </button>
       </div>
 
-      {/* User Profile */}
-      <div className="user-profile">
-        <div className="profile-avatar">P</div>
+      {/* User Profile Section */}
+      <div className="user-section">
+        {user ? (
+          <>
+            <div className="user-info">
+              <div className="profile-avatar">
+                {user.email.charAt(0).toUpperCase()}
+              </div>
+              <div className="user-details">
+                <div className="user-email">{user.email}</div>
+                <div className="user-status">Logged In</div>
+              </div>
+            </div>
+            {onLogout && (
+              <button className="logout-btn" onClick={onLogout} title="Logout">
+                🚪
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="guest-info">
+            <div className="profile-avatar">G</div>
+            <div className="user-details">
+              <div className="user-email">Guest User</div>
+              <div className="user-status">No Login</div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

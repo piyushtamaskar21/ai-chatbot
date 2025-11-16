@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import './App.css';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import InputArea from './components/InputArea';
+import './App.css';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -19,33 +19,94 @@ interface ChatSession {
 }
 
 function App() {
+  // AUTH
+  const [user, setUser] = useState<{ id: number; email: string } | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // CHAT SESSIONS
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState('new');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Generate title from first message using AI
-  const generateChatTitle = async (firstMessage: string): Promise<string> => {
+  // Restore auth state on mount
+  useEffect(() => {
+    const savedToken = localStorage.getItem('authToken');
+    const savedUser = localStorage.getItem('authUser');
+    if (savedToken && savedUser) {
+      setToken(savedToken);
+      setUser(JSON.parse(savedUser));
+      loadChatHistory(savedToken);
+    }
+  }, []);
+
+  // Load chat history for authenticated user
+  const loadChatHistory = async (authToken: string) => {
     try {
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/chat`,
+      const response = await axios.get(
+        `${process.env.REACT_APP_API_URL}/chats/history`,
         {
-          messages: [
-            {
-              role: 'system',
-              content: 'Generate a short, concise title (max 50 characters) for a chat conversation based on the first user message. Return ONLY the title, nothing else.',
-            },
-            { role: 'user', content: firstMessage },
-          ],
-          temperature: 0.5,
-          max_tokens: 50,
+          headers: { Authorization: `Bearer ${authToken}` },
         }
       );
-      return response.data.response.trim().substring(0, 50);
+      setSessions(response.data);
     } catch (error) {
-      console.error('Error generating title:', error);
-      return firstMessage.substring(0, 50);
+      setSessions([]);
+    }
+  };
+
+  // LOGIN
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    try {
+      const response = await axios.post(
+        `${process.env.REACT_APP_API_URL}/auth/login`,
+        {
+          email: loginEmail,
+          password: loginPassword,
+        }
+      );
+      const { access_token, user_id } = response.data;
+      setToken(access_token);
+      setUser({ id: user_id, email: loginEmail });
+      localStorage.setItem('authToken', access_token);
+      localStorage.setItem('authUser', JSON.stringify({ id: user_id, email: loginEmail }));
+      setLoginEmail('');
+      setLoginPassword('');
+      loadChatHistory(access_token);
+    } catch {
+      setLoginError('Login failed. Double check your email and password.');
+    }
+  };
+
+  // LOGOUT
+  const handleLogout = () => {
+    setUser(null);
+    setToken(null);
+    setSessions([]);
+    setMessages([]);
+    setCurrentSessionId('new');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('authUser');
+  };
+
+  // Title generator (AI)
+  const generateChatTitle = async (text: string): Promise<string> => {
+    try {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/chat`, {
+        messages: [
+          { role: 'system', content: 'Generate a short chat title (max 50 chars).' },
+          { role: 'user', content: text }
+        ],
+      });
+      return response.data.response.substring(0, 50);
+    } catch {
+      return text.substring(0, 50);
     }
   };
 
@@ -58,64 +119,37 @@ function App() {
   const handleSelectSession = (sessionId: string) => {
     setCurrentSessionId(sessionId);
     const session = sessions.find(s => s.id === sessionId);
-    if (session) {
-      setMessages(session.messages);
-    }
+    if (session) setMessages(session.messages);
   };
 
-  // Handle prompt suggestion click
   const handlePromptClick = (prompt: string) => {
     setInputValue(prompt);
   };
 
+  // Sending messages
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
-
     const userMessage: Message = { role: 'user', content: inputValue };
     const newMessages = [...messages, userMessage];
-
-    // Add empty assistant message for streaming
-    const assistantMessage: Message = {
-      role: 'assistant',
-      content: '',
-      isStreaming: true,
-    };
-
-    setMessages([...newMessages, assistantMessage]);
+    setMessages([...newMessages, { role: 'assistant', content: '', isStreaming: true }]);
     setInputValue('');
     setLoading(true);
 
-    // If this is a new chat, prepare to save it
     const isNewChat = currentSessionId === 'new';
-
     try {
-      // Call the backend
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/chat`,
-        {
-          messages: [
-            { role: 'system', content: 'You are a helpful assistant.' },
-            ...newMessages,
-          ],
-          temperature: 0.7,
-          max_tokens: 2000,
-        },
-        {
-          timeout: 60000,
-        }
-      );
-
-      // Get the full response text
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/chat`, {
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant.' },
+          ...newMessages,
+        ],
+      });
       const fullContent = response.data.response || '';
-
       // Simulate streaming
       let currentText = '';
       const words = fullContent.split(' ');
-
       for (let i = 0; i < words.length; i++) {
         currentText += (i === 0 ? '' : ' ') + words[i];
-
         setMessages(prevMessages => {
           const updatedMessages = [...prevMessages];
           const lastMessage = updatedMessages[updatedMessages.length - 1];
@@ -125,11 +159,8 @@ function App() {
           }
           return updatedMessages;
         });
-
-        await new Promise(resolve => setTimeout(resolve, 20));
+        await new Promise(r => setTimeout(r, 20));
       }
-
-      // Final update
       setMessages(prevMessages => {
         const updatedMessages = [...prevMessages];
         const lastMessage = updatedMessages[updatedMessages.length - 1];
@@ -139,59 +170,42 @@ function App() {
         return updatedMessages;
       });
 
-      // Handle new chat - generate title and save
-      if (isNewChat) {
+
+      console.log("TOKEN when saving:", token);
+      console.log("USER when saving:", user);
+      
+      // Save chat (if logged in and new chat)
+      if (user && token && isNewChat) {
         try {
           const title = await generateChatTitle(userMessage.content);
-
-          // Create properly typed messages array
           const finalMessages: Message[] = [
             { role: 'user', content: userMessage.content },
             { role: 'assistant', content: fullContent },
           ];
-
+          const saveResp = await axios.post(
+            `${process.env.REACT_APP_API_URL}/chats/save`,
+            { title, messages: finalMessages },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
           const newSession: ChatSession = {
-            id: Date.now().toString(),
-            title: title,
+            id: saveResp.data.id.toString(),
+            title,
             messages: finalMessages,
             timestamp: Date.now(),
           };
-
           setSessions(prev => [newSession, ...prev]);
           setCurrentSessionId(newSession.id);
         } catch (error) {
-          console.error('Error saving new chat:', error);
+          // Do nothing (fail silently but log)
+          console.error('Save chat error:', error);
         }
-      } else {
-        // Update existing session
-        setSessions(prev =>
-          prev.map(s => {
-            if (s.id === currentSessionId) {
-              const updatedMessages: Message[] = [
-                ...newMessages,
-                { role: 'assistant', content: fullContent },
-              ];
-              return {
-                ...s,
-                messages: updatedMessages,
-              };
-            }
-            return s;
-          })
-        );
       }
-    } catch (error: any) {
-      console.error('Error:', error);
-
-      const errorMsg =
-        error.response?.data?.detail ||
-        'Could not get response. Please check that backend is running at http://localhost:8000';
-
+    } catch (error) {
       setMessages(prevMessages => {
         const updatedMessages = [...prevMessages];
         const lastMessage = updatedMessages[updatedMessages.length - 1];
         if (lastMessage && lastMessage.role === 'assistant') {
-          lastMessage.content = `Error: ${errorMsg}`;
+          lastMessage.content = 'Error getting response. Try again.';
           lastMessage.isStreaming = false;
         }
         return updatedMessages;
@@ -201,6 +215,54 @@ function App() {
     }
   };
 
+  // Show classic chat app layout
+  if (!user) {
+    return (
+      <div className="app">
+        <Sidebar
+          sessions={[]}
+          currentSessionId={'new'}
+          onNewChat={handleNewChat}
+          onSelectSession={handleSelectSession}
+          onLogout={undefined}
+          user={null}
+        />
+        <div className="main-content" style={{ minHeight: 500 }}>
+          <div style={{
+            maxWidth: 400, margin: '64px auto', border: '1px solid #eee',
+            padding: 32, borderRadius: 8, background: 'white'
+          }}>
+            <h2 style={{ textAlign: 'center' }}>Login</h2>
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {loginError && <div className="error-message">{loginError}</div>}
+              <input type="email" placeholder="Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
+              <input type="password" placeholder="Password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
+              <button type="submit">Login</button>
+            </form>
+            <div style={{ fontSize: 13, marginTop: 20, color: '#888' }}>No account? <a href="#">Contact admin.</a></div>
+            <div style={{ fontSize: 13, marginTop: 14, color: '#888' }}>Or continue as guest:</div>
+            <button style={{ marginTop: 6 }}
+              onClick={() => { setUser(null); setToken(null); setSessions([]); setCurrentSessionId('new'); setMessages([]); }}>
+              Guest Mode
+            </button>
+          </div>
+          <ChatWindow
+            messages={messages}
+            loading={loading}
+            onPromptClick={handlePromptClick}
+            isNewChat={currentSessionId === 'new' && messages.length === 0}
+          />
+          <InputArea
+            inputValue={inputValue}
+            onInputChange={setInputValue}
+            onSubmit={sendMessage}
+            loading={loading}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <Sidebar
@@ -208,6 +270,8 @@ function App() {
         currentSessionId={currentSessionId}
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
+        onLogout={handleLogout}
+        user={user}
       />
       <div className="main-content">
         <ChatWindow
