@@ -40,53 +40,83 @@ export function SignupPage({ onSwitchToLogin, onGuestLogin }: SignupPageProps) {
     }
   };
 
+  const providers = [
+    { label: 'Continue with Google', key: 'google' },
+    { label: 'Continue with Microsoft', key: 'microsoft' },
+    { label: 'Continue with Apple', key: 'apple' },
+  ] as const;
+
   return (
-    <div className="auth-modal">
-      <div className="auth-container">
-        <button className="close-btn" onClick={() => onGuestLogin()}>✕</button>
-
-        <h1>Sign up</h1>
-        <p className="auth-subtitle">Create your account</p>
-
-        <button className="social-btn google-btn">
-          <span>🔍</span> Continue with Google
-        </button>
-        <button className="social-btn apple-btn">
-          <span>🍎</span> Continue with Apple
-        </button>
-        <button className="social-btn microsoft-btn">
-          <span>⊞</span> Continue with Microsoft
+    <div className="auth-overlay">
+      <div className="auth-card">
+        <button className="auth-close-btn" onClick={() => onGuestLogin()} aria-label="Close signup">
+          ✕
         </button>
 
-        <div className="divider">OR</div>
+        <div className="auth-header">
+          <h1>Create your account</h1>
+          <p>Enter your email to get started, then finish setting your password.</p>
+        </div>
 
-        <form onSubmit={handleSubmit}>
+        <div className="oauth-button-group">
+          {providers.map((provider) => (
+            <button
+              type="button"
+              key={provider.key}
+              className={`oauth-btn oauth-btn--${provider.key}`}
+            >
+              <span className={`oauth-icon oauth-icon--${provider.key}`} aria-hidden="true" />
+              <span>{provider.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="auth-divider">
+          <span>or</span>
+        </div>
+
+        <form onSubmit={handleSubmit} className="auth-form">
+          <label className="sr-only" htmlFor="signup-email">
+            Email address
+          </label>
           <input
+            id="signup-email"
             type="email"
             placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
           />
+          <label className="sr-only" htmlFor="signup-password">
+            Password
+          </label>
           <input
+            id="signup-password"
             type="password"
-            placeholder="Password"
+            placeholder="Create a password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
             required
           />
+          <label className="sr-only" htmlFor="signup-confirm-password">
+            Confirm password
+          </label>
           <input
+            id="signup-confirm-password"
             type="password"
             placeholder="Confirm password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
             required
           />
 
           {error && <div className="error-message">{error}</div>}
 
-          <button type="submit" className="submit-btn" disabled={loading}>
-            {loading ? 'Creating account...' : 'Sign up'}
+          <button type="submit" className="primary-btn" disabled={loading}>
+            {loading ? 'Continuing…' : 'Continue'}
           </button>
         </form>
 
@@ -97,7 +127,7 @@ export function SignupPage({ onSwitchToLogin, onGuestLogin }: SignupPageProps) {
           </button>
         </p>
 
-        <button onClick={onGuestLogin} className="guest-btn">
+        <button onClick={onGuestLogin} className="ghost-btn">
           Continue as Guest
         </button>
       </div>
