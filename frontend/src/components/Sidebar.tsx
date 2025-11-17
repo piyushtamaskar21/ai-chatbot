@@ -4,6 +4,10 @@ import '../styles/Sidebar.css';
 interface User {
   id: number;
   email: string;
+  name?: string | null;
+  fullName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
 }
 
 interface ChatSession {
@@ -30,6 +34,50 @@ function Sidebar({
   onLogout,
   user,
 }: SidebarProps) {
+  const getDisplayName = () => {
+    if (!user) {
+      return 'Guest User';
+    }
+
+    const fullName =
+      user.fullName?.trim() ||
+      user.name?.trim() ||
+      [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+
+    if (fullName) {
+      return fullName;
+    }
+
+    const emailName = user.email?.split('@')[0] ?? '';
+    if (!emailName) {
+      return user.email;
+    }
+
+    return emailName
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
+  };
+
+  const getInitials = () => {
+    const reference = getDisplayName();
+    const words = reference.trim().split(/\s+/).filter(Boolean);
+
+    if (words.length === 0) {
+      return user?.email?.charAt(0).toUpperCase() ?? 'G';
+    }
+
+    if (words.length === 1) {
+      return words[0].slice(0, 2).toUpperCase();
+    }
+
+    return (words[0][0] + words[1][0]).toUpperCase();
+  };
+
+  const displayName = getDisplayName();
+  const userInitials = getInitials();
+
   return (
     <div className="sidebar">
       {/* Header */}
@@ -70,31 +118,20 @@ function Sidebar({
 
       {/* User Profile Section */}
       <div className="user-section">
-        {user ? (
-          <>
-            <div className="user-info">
-              <div className="profile-avatar">
-                {user.email.charAt(0).toUpperCase()}
-              </div>
-              <div className="user-details">
-                <div className="user-email">{user.email}</div>
-                <div className="user-status">Logged In</div>
-              </div>
-            </div>
-            {onLogout && (
-              <button className="logout-btn" onClick={onLogout} title="Logout">
-                🚪
-              </button>
-            )}
-          </>
-        ) : (
-          <div className="guest-info">
-            <div className="profile-avatar">G</div>
-            <div className="user-details">
-              <div className="user-email">Guest User</div>
-              <div className="user-status">No Login</div>
-            </div>
+        <div className="user-info" aria-live="polite">
+          <div className="profile-avatar" aria-hidden="true">
+            {userInitials}
           </div>
+          <div className="user-details">
+            <div className="user-name">{displayName}</div>
+            <div className="user-status">{user ? 'Logged In' : 'Guest Mode'}</div>
+          </div>
+        </div>
+        {user && onLogout && (
+          <button className="logout-btn" onClick={onLogout} title="Logout">
+            <span aria-hidden="true">↗</span>
+            <span className="sr-only">Logout</span>
+          </button>
         )}
       </div>
     </div>
