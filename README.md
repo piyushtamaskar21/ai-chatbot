@@ -1,4 +1,4 @@
-# ChatGPT-Style Fullstack Chatbot with JWT Auth & Multi-OAuth
+# AI Chatbot with JWT Auth & Multi-OAuth
 
 A modern, production-ready fullstack chatbot web app inspired by ChatGPT. Features include multi-provider authentication (manual, Google, Microsoft, Apple), JWT-secured backend, chat history, user profiles, and beautiful UI matching OpenAI’s signature style.
 
